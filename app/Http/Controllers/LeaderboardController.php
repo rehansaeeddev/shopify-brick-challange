@@ -25,7 +25,8 @@ class LeaderboardController extends Controller
              VALUES (?, ?, ?, ?, ?, NOW())
              ON DUPLICATE KEY UPDATE
                best_score = GREATEST(best_score, VALUES(best_score)),
-               updated_at = NOW()',
+               updated_at = IF(VALUES(best_score) > best_score, NOW(), updated_at),
+               best_score = GREATEST(best_score, VALUES(best_score))',
             [$today, $shopId, $playerId, $data['nickname'], $data['best_score']]
         );
 
