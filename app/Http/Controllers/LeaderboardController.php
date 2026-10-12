@@ -24,12 +24,24 @@ class LeaderboardController extends Controller
             'INSERT INTO daily_scores (day, shop_id, player_id, nickname, best_score, updated_at)
              VALUES (?, ?, ?, ?, ?, NOW())
              ON DUPLICATE KEY UPDATE
-               best_score = GREATEST(best_score, VALUES(best_score)),
                updated_at = IF(VALUES(best_score) > best_score, NOW(), updated_at),
                best_score = GREATEST(best_score, VALUES(best_score))',
             [$today, $shopId, $playerId, $data['nickname'], $data['best_score']]
         );
 
         return response()->json(['saved' => true, 'day' => $today]);
+    }
+
+    public function top()
+    {
+        $today = now('UTC')->toDateString();
+
+        $topScores = DB::table('daily_scores')
+            ->where('day', $today)
+            ->orderByDesc('best_score')
+            ->limit(10)
+            ->get(['nickname', 'best_score']);
+
+        return response()->json($topScores);
     }
 }
