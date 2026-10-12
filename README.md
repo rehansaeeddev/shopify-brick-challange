@@ -1,58 +1,75 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Shopify Brick Challenge
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A free brick-breaker game for Shopify merchants, with a daily leaderboard. Merchants play during short breaks in the Shopify admin, and their best score for the day appears on a shared board.
 
-## About Laravel
+## Why I built this
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+I wanted to learn how a real Shopify embedded app works end to end: a frontend inside the admin, a secure backend, a database with business rules, and the decisions that come with a public leaderboard. This project was also a step from building apps with AI assistance toward understanding and maintaining the code myself.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## What it does
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- Players submit a score after a game.
+- The server keeps only each player's best score per shop per day.
+- The leaderboard shows the top 10 scores for the current day.
+- Scores reset every 24 hours at 00:00 UTC, so every merchant competes on the same clock.
+- Only nicknames and scores are shown. No customer data is stored.
 
-## Learning Laravel
+## Tech stack
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- **Backend:** Laravel (PHP 8.4), REST API
+- **Database:** MySQL
+- **Frontend (in progress):** React Router and Shopify Polaris, inside the Shopify admin
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Key design decisions
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+- **Scores are validated on the server.** The browser is never trusted for the final score, and input is checked against limits.
+- **One row per player per day.** A unique key on (day, shop, player) enforces this in the database, not only in code.
+- **Upsert logic.** `INSERT ... ON DUPLICATE KEY UPDATE` keeps the higher score in a single query, so there is no race between "check" and "save".
+- **Index for the leaderboard.** A composite index on (day, best_score) lets MySQL read the top 10 directly. I verified this with `EXPLAIN`, comparing the query plan with and without the index.
+- **UTC daily key.** The server sets the date, so the reset is consistent and players can't change it.
 
-## Agentic Development
+## Current status
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+- [x] Database schema and migrations
+- [x] Score submission with validation
+- [x] Best-score-per-day logic
+- [x] Top 10 endpoint
+- [ ] Shopify session token verification (currently uses placeholder shop and player IDs)
+- [ ] React Router and Polaris frontend
+- [ ] Game (brick breaker in the admin modal)
+- [ ] GDPR webhooks (`shop/redact`, `customers/redact`, `customers/data_request`)
+
+## Running locally
+
+Requirements: PHP 8.4, Composer, MySQL.
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+cp .env.example .env
+php artisan key:generate
+# Set DB_* values in .env for your local MySQL
+php artisan migrate
+php artisan serve
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+API endpoints:
 
-## Contributing
+- `POST /api/leaderboard/submit` with `nickname` and `best_score`
+- `GET /api/leaderboard/top`
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## What I learned
 
-## Code of Conduct
+- Writing and testing a schema, including how indexes change query plans
+- Keeping business rules (one best score per day) in the database
+- Separating what the client sends from what the server trusts
+- Debugging a Laravel setup: environment files, migrations, and model configuration
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Roadmap
 
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- Verify Shopify session tokens so each score is tied to the real shop and staff member
+- Build the admin game and leaderboard UI
+- Add privacy policy and data deletion handling before any public release
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is licensed under the MIT License. See the LICENSE file for details.
