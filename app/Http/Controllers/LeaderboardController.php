@@ -16,9 +16,9 @@ class LeaderboardController extends Controller
 
         $today = now('UTC')->toDateString();
 
-        // Placeholders until the Shopify session check is added
-        $shopId = 'test-shop';
-        $playerId = 'test-player';
+        // Set by VerifyShopifySession after the token is checked
+        $shopId = $request->attributes->get('shop_id');
+        $playerId = $request->attributes->get('player_id');
 
         DB::statement(
             'INSERT INTO daily_scores (day, shop_id, player_id, nickname, best_score, updated_at)
