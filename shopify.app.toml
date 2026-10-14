@@ -1,0 +1,45 @@
+# Shopify app configuration.
+#
+# Apply changes with:  shopify app deploy
+#
+# client_id below is a PLACEHOLDER. Replace it locally with this app's real
+# client ID from the Partner Dashboard and do not commit the real value.
+# application_url and the redirect URLs must point at the deployed host; the
+# values here are examples, and `shopify app dev` rewrites them to the tunnel.
+
+name = "brick-challenge"
+client_id = "REPLACE_WITH_YOUR_CLIENT_ID"
+application_url = "https://example.com/shopify/app"
+embedded = true
+
+[access_scopes]
+# Empty on purpose. The app never calls the Admin API -- the shop and staff
+# identity come from the verified session token, so no scopes are needed.
+scopes = ""
+
+[auth]
+redirect_urls = [
+  "https://example.com/shopify/app",
+  "https://example.com/shopify/app/leaderboard",
+]
+
+[webhooks]
+api_version = "2025-10"
+
+  # The three privacy topics are mandatory for App Store distribution. Each is
+  # handled by its own route in routes/api.php -> WebhookController, behind
+  # VerifyShopifyWebhook (HMAC over the raw body).
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request" ]
+  uri = "/api/webhooks/customers/data-request"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/redact" ]
+  uri = "/api/webhooks/customers/redact"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "shop/redact" ]
+  uri = "/api/webhooks/shop/redact"
+
+[build]
+include_config_on_deploy = true
