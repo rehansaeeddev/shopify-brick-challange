@@ -26,6 +26,8 @@ function stubEl(id) {
         textContent: '',
         getContext: () => noopCtx,
         addEventListener: (type, fn) => { (bag[type] ||= []).push(fn); },
+        setAttribute: () => {},
+        insertAdjacentElement: (_, element) => { els[element.id] = element; },
         focus: () => {},
         // 240x480 displayed 1:1, so one cell is 24px on screen.
         getBoundingClientRect: () => ({ width: 240, height: 480, left: 0, top: 0 }),
@@ -51,6 +53,7 @@ const sandbox = {
     window: { matchMedia: () => ({ matches: false }) },
     document: {
         getElementById: (id) => (els[id] ||= stubEl(id)),
+        createElement: () => ({ id: '', textContent: '', style: {}, setAttribute: () => {} }),
         querySelectorAll: () => [],
     },
     // Controllable clock: a stuck clock makes every drag look like a flick.
@@ -275,7 +278,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
     spawn();
     await settle();
     assert.strictEqual(ctl.posts.length, 1, 'an empty nickname must not post');
-    assert.match(document.getElementById('last-clear').textContent, /leaderboard name/i,
+    assert.match(document.getElementById('nickname-error')?.textContent ?? '', /add a name/i,
         'the player is told why nothing was posted');
     console.log('  4. empty nickname skipped        OK');
 
