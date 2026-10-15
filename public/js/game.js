@@ -62,6 +62,8 @@ let dropAcc = 0;          // milliseconds banked towards the next gravity step
 let submitted = false;    // one leaderboard post per game
 let elapsed = 0;          // ms of play time this game, for the clock badge
 let clockShown = -1;      // last whole second written to the DOM
+let session = null;       // { gameId, seed } issued by the server for this game
+let starting = false;     // guards against opening two games at once
 
 // ------------------------------------------------------------------- helpers
 
@@ -105,11 +107,35 @@ function landingRow() {
     return row;
 }
 
+/**
+ * mulberry32: a tiny seeded pseudo-random generator.
+ *
+ * Given the same seed it produces the same sequence every time, which is what
+ * lets the server hand out a piece order instead of the browser inventing one.
+ * Only the piece bag uses it -- dust, shake and particles stay on Math.random,
+ * since nothing needs to reproduce those.
+ */
+function makeRng(seed) {
+    let a = seed >>> 0;
+
+    return function () {
+        a = (a + 0x6d2b79f5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), 1 | t);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+// Seeded locally so the attract screen can deal pieces before any game has been
+// opened. newGame replaces it with the seed the server issues.
+let rng = makeRng((Math.random() * 0xffffffff) >>> 0);
+
 function refillBag() {
     const keys = Object.keys(SHAPES);
 
     for (let i = keys.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rng() * (i + 1));
         [keys[i], keys[j]] = [keys[j], keys[i]];
     }
 
@@ -606,7 +632,28 @@ function seedDemoStack() {
     rows.forEach((cells, i) => { grid[ROWS - rows.length + i] = cells; });
 }
 
-function newGame() {
+/**
+ * Starts a game.
+ *
+ * The session is opened here and awaited, not fetched in advance: the server
+ * timestamps that row and uses it to measure how long the game really took, so
+ * opening it early would count idle time as play time. If the call fails the
+ * game still runs, but it cannot be posted to the leaderboard.
+ */
+async function newGame() {
+    if (starting) return;          // a double tap must not open two games
+    starting = true;
+
+    try {
+        session = await apiFetch('/api/game/start', { method: 'POST' });
+        rng = makeRng(session.seed);
+    } catch {
+        session = null;
+        rng = makeRng((Math.random() * 0xffffffff) >>> 0);
+    } finally {
+        starting = false;
+    }
+
     grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     bag = [];
     queue = [nextKey(), nextKey(), nextKey()];
@@ -810,6 +857,7 @@ async function apiFetch(path, options = {}) {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
+            ...(options.headers ?? {}),
         },
     });
     return res.json();
@@ -860,34 +908,98 @@ async function submitScore() {
     try {
         if (score <= 0) return;
 
+        if (!session) {
+            if (note) note.textContent = 'This game was not verified, so it cannot be posted.';
+            return;
+        }
+
         const field = document.getElementById('nickname');
         const nickname = (field?.value ?? '').trim();
 
         if (!nickname) {
-            if (note) note.textContent = 'Add a leaderboard name to post your score.';
+            showNicknameError('Add a name to post your score.');
             return;
         }
 
-        // The API validates best_score as an integer between 0 and 100000.
+        if (nicknameIsBlocked(nickname)) {
+            showNicknameError(NAME_BLOCKED_MSG);
+            return;
+        }
+
         const best = Math.min(100000, Math.max(0, Math.round(score)));
 
         const result = await apiFetch('/api/leaderboard/submit', {
             method: 'POST',
-            body: JSON.stringify({ nickname, best_score: best }),
+            body: JSON.stringify({
+                gameId: session.gameId,
+                nickname,
+                best_score: best,
+                lines,
+            }),
         });
 
-        // apiFetch parses the body without checking res.ok, so a 422 would look
-        // like success. The controller returns saved:true, so test for that.
         if (result?.saved === true) {
             rememberNickname(nickname);
+            showNicknameError('');
             if (note) note.textContent = `Score posted as ${nickname}.`;
             await loadBest();
-        } else if (note) {
-            note.textContent = 'That score could not be posted.';
+        } else {
+            const serverMsg = result?.errors?.nickname?.[0];
+            if (serverMsg) {
+                showNicknameError(serverMsg);
+            } else if (note) {
+                note.textContent = result?.message ?? 'That score could not be posted.';
+            }
         }
     } catch {
         if (note) note.textContent = 'Could not reach the leaderboard.';
     }
+}
+
+// Same word list as AllowedNickname.php. Keep the two lists identical.
+const BLOCKED_SUBSTRINGS = [
+    'fuck', 'shit', 'bitch', 'bastard', 'cunt', 'whore', 'slut',
+    'nigger', 'nigga', 'faggot', 'retard', 'rape', 'nazi', 'porn',
+];
+const BLOCKED_EXACT = [
+    'ass', 'arse', 'dick', 'cock', 'pussy', 'tit', 'tits', 'piss', 'fag',
+];
+
+function nicknameIsBlocked(name) {
+    const n = name.toLowerCase()
+        .replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e')
+        .replace(/[4@]/g, 'a').replace(/[5$]/g, 's')
+        .replace(/[^a-z]/g, '');
+
+    if (BLOCKED_SUBSTRINGS.some((w) => n.includes(w))) return true;
+    return BLOCKED_EXACT.includes(n);
+}
+
+let nicknameErrorEl = null;
+
+// Shows a message directly under the name field. An empty string clears it.
+function showNicknameError(msg) {
+    const field = document.getElementById('nickname');
+    if (!field) return;
+
+    if (!nicknameErrorEl) {
+        nicknameErrorEl = document.createElement('div');
+        nicknameErrorEl.id = 'nickname-error';
+        nicknameErrorEl.setAttribute('role', 'alert');
+        nicknameErrorEl.style.cssText = 'color:#d72c0d;font-size:13px;margin-top:4px;';
+        field.insertAdjacentElement('afterend', nicknameErrorEl);
+    }
+
+    nicknameErrorEl.textContent = msg;
+    field.setAttribute('aria-invalid', msg ? 'true' : 'false');
+}
+
+const NAME_BLOCKED_MSG = 'This name is not allowed. Please choose another name.';
+const nicknameField = document.getElementById('nickname');
+if (nicknameField) {
+    nicknameField.addEventListener('input', () => {
+        showNicknameError(nicknameIsBlocked(nicknameField.value) ? NAME_BLOCKED_MSG : '');
+    });
 }
 
 seedDemoStack();
