@@ -131,8 +131,8 @@
     <h2>Contact</h2>
 
     <p>
-        For any question about this policy or to request deletion, contact the app
-        developer through the Shopify App Store listing.
+        For any question about this policy or to request deletion, email
+        <a href="mailto:hs2438450@gmail.com">hs2438450@gmail.com</a>.
     </p>
 </body>
 </html>
