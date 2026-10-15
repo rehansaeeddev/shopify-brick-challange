@@ -1,0 +1,12 @@
+.env
+.env.*
+.git
+.claude
+.mcp.json
+boost.json
+node_modules
+vendor
+public/build
+public/hot
+storage/logs/*
+tests
