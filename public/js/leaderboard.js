@@ -13,6 +13,7 @@ async function apiFetch(path, options = {}) {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
+            ...(options.headers ?? {}),
         },
     });
     return res.json();

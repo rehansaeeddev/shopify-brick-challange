@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\GameController;
 use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Middleware\VerifyShopifySession;
@@ -12,6 +13,11 @@ use Illuminate\Support\Facades\Route;
 // The 'score-submit' limiter is keyed on the verified shop and staff member
 // (see AppServiceProvider) because an IP key is both spoofable and unfair.
 Route::middleware(VerifyShopifySession::class)->group(function () {
+    // Opens a game and records when it started. Throttled too, or it is an
+    // unbounded row factory.
+    Route::post('/game/start', [GameController::class, 'start'])
+        ->middleware('throttle:game-start');
+
     Route::post('/leaderboard/submit', [LeaderboardController::class, 'submit'])
         ->middleware('throttle:score-submit');
 

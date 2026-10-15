@@ -35,7 +35,7 @@ function stubEl(id) {
 const els = {};
 
 // Shared with the sandbox so the test body can read posts and flip failFetch.
-const ctl = { posts: [], failFetch: false, now: 0 };
+const ctl = { posts: [], failFetch: false, now: 0, starts: 0, seed: 12345 };
 
 const sandbox = {
     console,
@@ -64,6 +64,10 @@ const sandbox = {
     },
     fetch: async (path, options) => {
         if (ctl.failFetch) throw new Error('network down');
+        if (path === '/api/game/start') {
+            ctl.starts += 1;
+            return { json: async () => ({ gameId: 'test-game-id', seed: ctl.seed }) };
+        }
         if (options?.method === 'POST') {
             ctl.posts.push(JSON.parse(options.body));
             return { json: async () => ({ saved: true, day: '2026-10-14' }) };
@@ -77,7 +81,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
 
 ;(async function () {
     // ---- 1. a real line clear, start to finish -------------------------
-    newGame();
+    await await newGame();
     assert.strictEqual(state, 'playing', 'newGame should start play');
 
     // Leave columns 0-3 open, then hard-drop a flat I piece into them.
@@ -130,7 +134,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
     assert.strictEqual(held, parked, 'a swap past the budget changes nothing');
     assert.strictEqual(piece.key, falling, 'the falling piece is untouched too');
 
-    newGame();
+    await newGame();
     assert.strictEqual(holdsLeft, MAX_HOLDS, 'New game refills the budget');
     assert.match(document.getElementById('touch-hint').textContent, /swipe up to hold \\(3\\)/i,
         'New game restores the hint to a full budget');
@@ -144,7 +148,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
     // Drag right three cells, slowly enough not to read as a flick. The piece is
     // pinned to a 2-wide O at column 2 so the drag can't be stopped by the wall
     // (a random 4-wide I at column 4 would legitimately block the third step).
-    newGame();
+    await newGame();
     piece = { key: 'O', shape: [[1, 1], [1, 1]], row: 0, col: 2 };
     const beforeCol = piece.col;
     fire('pointerdown', pt(100, 100));
@@ -197,7 +201,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
     console.log('  2b. touch gestures               OK');
 
     // ---- 2c. the clock --------------------------------------------------
-    newGame();
+    await newGame();
     assert.strictEqual(document.getElementById('clock').textContent, '00:00',
         'New game resets the clock');
 
@@ -217,6 +221,25 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
     assert.strictEqual(document.getElementById('clock').textContent, '01:06',
         'and resumes afterwards');
     console.log('  2c. clock mm:ss                  OK');
+
+    // ---- 2d. the seeded piece bag ---------------------------------------
+    // The same seed must deal the same pieces, which is what makes a
+    // server-issued seed meaningful at all.
+    const dealFrom = (seed) => {
+        const r = makeRng(seed);
+        const out = [];
+        const keys = Object.keys(SHAPES);
+        for (let n = 0; n < 14; n++) out.push(Math.floor(r() * keys.length));
+        return out.join(',');
+    };
+
+    assert.strictEqual(dealFrom(12345), dealFrom(12345), 'the same seed deals the same pieces');
+    assert.notStrictEqual(dealFrom(12345), dealFrom(999), 'different seeds differ');
+
+    ctl.starts = 0;
+    await newGame();
+    assert.strictEqual(ctl.starts, 1, 'newGame opens exactly one server game');
+    console.log('  2d. seeded piece bag             OK');
 
     setPaused(true);
     assert.strictEqual(state, 'paused');
@@ -245,7 +268,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
     console.log('  3. submit, trimmed + clamped     OK');
 
     // ---- 4. no nickname: skip, don't post ------------------------------
-    newGame();
+    await newGame();
     document.getElementById('nickname').value = '   ';
     score = 400;
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid[r][c] = 'A';
@@ -258,7 +281,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
 
     // ---- 5. the network is down ----------------------------------------
     ctl.failFetch = true;
-    newGame();
+    await newGame();
     document.getElementById('nickname').value = 'Ali';
     score = 500;
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid[r][c] = 'A';
@@ -269,8 +292,10 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
 
     await settle();
     assert.strictEqual(ctl.posts.length, 1, 'the failed post was not recorded');
-    assert.match(document.getElementById('last-clear').textContent, /could not reach/i,
-        'the player sees the failure');
+    // With the network down the game cannot even be opened, so the player is
+    // told the game was unverified rather than that the post failed.
+    assert.match(document.getElementById('last-clear').textContent, /not verified|could not reach/i,
+        'the player is told why nothing was posted');
     console.log('  5. network failure handled       OK');
 
     console.log('\\nsmoke test: all paths executed cleanly');

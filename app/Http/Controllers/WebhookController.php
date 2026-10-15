@@ -61,11 +61,19 @@ class WebhookController extends Controller
         // sends as shop_domain (for example "example.myshopify.com").
         $deleted = DB::table('daily_scores')->where('shop_id', $shopDomain)->delete();
 
-        Log::info('Shopify shop/redact: deleted daily scores.', [
+        // game_sessions holds shop_id and player_id too, so it has to go as well.
+        $sessions = DB::table('game_sessions')->where('shop_id', $shopDomain)->delete();
+
+        Log::info('Shopify shop/redact: deleted shop data.', [
             'shop_domain' => $shopDomain,
-            'deleted' => $deleted,
+            'daily_scores' => $deleted,
+            'game_sessions' => $sessions,
         ]);
 
-        return response()->json(['ok' => true, 'deleted' => $deleted]);
+        return response()->json([
+            'ok' => true,
+            'deleted' => $deleted,
+            'sessions_deleted' => $sessions,
+        ]);
     }
 }

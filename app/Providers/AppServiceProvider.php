@@ -45,5 +45,18 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(10)->by($key);
         });
+
+        // Starting a game writes a row, so it needs its own ceiling. Kept well
+        // above the submit limit: a player may abandon several games in a row.
+        RateLimiter::for('game-start', function (Request $request) {
+            $shop = (string) $request->attributes->get('shop_id', '');
+            $player = (string) $request->attributes->get('player_id', '');
+
+            $key = ($shop !== '' && $player !== '')
+                ? "game-start:{$shop}|{$player}"
+                : 'game-start:ip:' . $request->ip();
+
+            return Limit::perMinute(30)->by($key);
+        });
     }
 }

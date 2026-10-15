@@ -74,7 +74,9 @@ php artisan serve
 
 API endpoints:
 
-- `POST /api/leaderboard/submit` with `nickname` and `best_score` (throttled, 10/min)
+- `POST /api/game/start` → `{gameId, seed}` (throttled, 30/min)
+- `POST /api/leaderboard/submit` with `gameId`, `nickname`, `best_score`, `lines`
+  (throttled, 10/min)
 - `GET /api/leaderboard/top`
 - `POST /api/webhooks/customers/data-request`
 - `POST /api/webhooks/customers/redact`
@@ -93,7 +95,7 @@ composer test
 That runs both suites, which can also be run on their own:
 
 ```bash
-php artisan test    # 22 feature tests: API, HMAC webhooks, throttle, upsert, pages
+php artisan test    # 37 feature tests: API, HMAC webhooks, throttle, upsert, pages
 npm test            # game logic: row-clear maths, effects, gestures, clock, submit
 ```
 
@@ -142,10 +144,24 @@ throws rather than silently writing the wrong thing.
 Worth stating plainly rather than leaving to be discovered:
 
 - **The daily leaderboard is global, not per shop.** `top()` filters on the date only, so a nickname typed in one store is visible in every store that installs the app. The composite index on `(day, best_score)` is built for exactly that global query, so it is the intended design — but the nickname field should say so, since "today's leaderboard" reads as store-local.
-- **The score is client-supplied** (see *Key design decisions* above). Mitigated,
-  not solved: validation caps it at 100,000 and submit is throttled to 10/min,
-  but a determined player can still post a value they did not earn. Proving it
-  would mean replaying the game server-side.
+- **The score is client-supplied** (see *Key design decisions* above). Mitigated
+  in layers, not solved:
+  - A game must be opened through `POST /api/game/start`, which records when it
+    began, and that game id can be redeemed exactly once by the player it was
+    issued to.
+  - The elapsed time is measured by the server, not reported by the browser, and
+    is checked against the minimum a given number of lines could take. It is a
+    lower bound: a forger who simply waits will clear it.
+  - The submitted score is checked against the lowest and highest score the
+    scoring rules allow for the claimed line count.
+  - Submissions are throttled per player, not per IP.
+
+  A forger who sends internally consistent numbers after a realistic delay will
+  still get through. Closing that needs server-side replay: the client sends the
+  resting position of each piece and the server replays them against a
+  server-chosen piece sequence and computes the score itself. The seed handed out
+  by `game/start` is the groundwork for that; on its own it proves nothing,
+  because nothing yet forces the browser to use it.
 - **Partly unverified in a real browser.** The game page has been checked by hand
   in the Shopify admin on mobile: touch gestures, the clock and pause all behave.
   The leaderboard page (`s-table` rows, loading and empty states) and the app nav

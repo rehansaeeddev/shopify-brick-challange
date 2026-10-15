@@ -72,6 +72,18 @@
         </tr>
     </table>
 
+    <h2>Game records</h2>
+
+    <p>
+        When a game starts, a short-lived row is written in a table called
+        <code>game_sessions</code> holding a random game ID, the shop domain, the
+        staff member ID, a random number used to pick the falling pieces, and the
+        time the game began. This is how the app checks that a submitted score
+        belongs to a game that was really started, and that it is counted only
+        once. These rows are deleted automatically six hours after the game
+        starts, and immediately if the store is uninstalled.
+    </p>
+
     <h2>Stored in your browser, not on the server</h2>
 
     <p>

@@ -115,6 +115,27 @@ class WebhookTest extends TestCase
         $this->assertSame(1, DB::table('daily_scores')->where('shop_id', 'other.myshopify.com')->count());
     }
 
+    public function test_shop_redact_also_deletes_that_shops_game_sessions(): void
+    {
+        foreach ([['example.myshopify.com', '1'], ['example.myshopify.com', '2'], ['other.myshopify.com', '3']] as [$shop, $player]) {
+            DB::table('game_sessions')->insert([
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'shop_id' => $shop,
+                'player_id' => $player,
+                'seed' => 42,
+                'created_at' => now(),
+                'used_at' => null,
+            ]);
+        }
+
+        $this->postWebhook('/api/webhooks/shop/redact', ['shop_domain' => 'example.myshopify.com'])
+            ->assertStatus(200)
+            ->assertJson(['sessions_deleted' => 2]);
+
+        $this->assertSame(0, DB::table('game_sessions')->where('shop_id', 'example.myshopify.com')->count());
+        $this->assertSame(1, DB::table('game_sessions')->where('shop_id', 'other.myshopify.com')->count());
+    }
+
     public function test_customer_topics_delete_nothing(): void
     {
         $this->seedScore('example.myshopify.com');
