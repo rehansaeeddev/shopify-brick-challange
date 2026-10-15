@@ -23,6 +23,9 @@ WORKDIR /var/www/html
 COPY . .
 COPY --from=frontend /app/public/build ./public/build
 
+# Aiven MySQL TLS certificate authority
+COPY docker/certs/ca.pem /var/www/html/docker/certs/ca.pem
+
 RUN composer install \
     --no-dev \
     --prefer-dist \
