@@ -11,6 +11,11 @@ class AllowedNickname implements ValidationRule
     private const BLOCKED_SUBSTRINGS = [
         'fuck', 'shit', 'bitch', 'bastard', 'cunt', 'whore', 'slut',
         'nigger', 'nigga', 'faggot', 'retard', 'rape', 'nazi', 'porn',
+        'idiot', 'moron', 'dumbass', 'asshole', 'loser', 'wanker', 'twat', 'prick', 'scumbag',
+        'bewakoof', 'bewaqoof', 'bevaqoof', 'jahil', 'kamina', 'kameena', 'harami',
+        'zaleel', 'badtameez', 'ghatiya', 'kutta', 'kutte', 'kutti', 'chutiya',
+        'madarchod', 'bhenchod', 'behenchod',
+        'dhakkan', 'nikamma', 'gadha', 'gadhe', 'besharam', 'ulludapattha', 'ulludapatha',
     ];
 
     // Matched only when the whole name equals the word, so "class" is still allowed.
@@ -39,4 +44,3 @@ class AllowedNickname implements ValidationRule
         }
     }
 }
-

@@ -7,6 +7,7 @@ use Firebase\JWT\JWT;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class LeaderboardTest extends TestCase
@@ -133,6 +134,27 @@ class LeaderboardTest extends TestCase
 
         $this->submit(['nickname' => 'Ali', 'best_score' => 10, 'lines' => 1], 'garbage.token.here')
             ->assertStatus(401);
+    }
+
+    #[DataProvider('blockedNicknames')]
+    public function test_insulting_nicknames_are_rejected(string $nickname): void
+    {
+        $this->playAndSubmit(nickname: $nickname)
+            ->assertStatus(422)
+            ->assertJsonPath('errors.nickname.0', 'Please use another name. This nickname is not allowed.');
+
+        $this->assertDatabaseCount('daily_scores', 0);
+    }
+
+    public static function blockedNicknames(): array
+    {
+        return [
+            'English insult' => ['idiot'],
+            'Roman Urdu spelling' => ['bewaqoof'],
+            'Roman Urdu profanity' => ['madarchod'],
+            'Punjabi insult' => ['dhakkan'],
+            'Punjabi phrase' => ['ullu da pattha'],
+        ];
     }
 
     /** The upsert must keep the higher score and never add a second row per day. */
